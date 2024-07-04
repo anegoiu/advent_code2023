@@ -1,6 +1,7 @@
 """
 Puzzle description: https://adventofcode.com/2023/day/8
 """
+from collections import defaultdict
 from pathlib import Path
 import sys
 import ultraimport
@@ -101,6 +102,52 @@ def get_num_steps(instructions:list[str], node_to_neighbors:dict[str,list[str]])
         num_steps += 1
     return num_steps
 
+
+def find_cycle(starting_node, instructions, node_to_neighbors):
+    """
+    Given the starting node, the list of directions and the node map this function identifies when 
+    we reach a cycle on the path of the starting node.
+    
+    Returns the cycle length and the offset.
+
+    The cycle length is defined by the number of steps we take in between 2 visits of the endnoe
+    The offset is the # steps from the start node to the end node
+    
+    Assumption: there is only one end node on the path of each start node. (This is true for our
+    input data)
+
+    """
+    found_cycle = False
+    curr_node = starting_node
+    idx = 0
+    num_steps = 0
+    offset, found_the_end_node = None, False
+    
+    while not found_cycle:
+        if instructions[idx] == "L":
+            direction = 0
+        else:
+            direction = 1
+        curr_node = node_to_neighbors[curr_node][direction]
+        num_steps += 1
+        
+        #  find next index in the instructions array
+        if idx == len(instructions) - 1:
+            idx = 0
+        else:
+            idx += 1
+            
+        # count step if we're on end node and check if we're in a cycle
+        if curr_node[-1] == "Z":
+            # if this is the first time we reach this end node, record offset from start
+            if curr_node and not found_the_end_node:
+                offset = num_steps
+                found_the_end_node = True
+            else:
+                if (num_steps - offset) % len(instructions) == 0:
+                    print("We found cycle")
+                    return offset, num_steps - offset
+
 def get_num_steps_part_2(instructions:list[str], node_to_neighbors:dict[str,list[str]])-> int:
     """
     Args:
@@ -112,38 +159,41 @@ def get_num_steps_part_2(instructions:list[str], node_to_neighbors:dict[str,list
     """
     # identify all of the starting nodes and make an array
     curr_nodes = []
-    # reached_end_state = False 
-    # array_idx = 0
-    # num_steps = 0
-    next = create_next_closure(instructions)
     for node in node_to_neighbors:
         if node[-1] == "A":
-            curr_nodes.append(node)
-            
-    # t = dt.datetime.now()
-    curr_node, first_node = curr_nodes[0], curr_nodes[0]
-    idx = 0
-    num_steps = 0
-    num_end_nodes = 0
-    while True:
-        if instructions[idx] == "L":
-            direction = 0
-        else:
-            direction = 1
-        curr_node = node_to_neighbors[curr_node][direction]
-        num_steps += 1
-        
-        if curr_node == first_node and idx == 0:
-            break
-        if idx == len(instructions) - 1:
-            idx = 0
-        else:
-            idx += 1
-        if curr_node[-1] == "Z":
-            num_end_nodes += 1
+            curr_nodes.append(node) 
+   
+    # Mapping from start node to its offset from the start & it's cycle length
+    start_node_to_cycle: dict[str, dict[str:int]] =defaultdict(dict) # definiytion of inner dict :offset, length
+    for starting_node in curr_nodes:
+        offset, cycle_length = find_cycle(starting_node, instructions, node_to_neighbors)
+        start_node_to_cycle[starting_node]["offset"] = offset
+        start_node_to_cycle[starting_node]["length"] = cycle_length
        
-    print(num_steps)
-    print(f"Number of end nodes encountered: {num_end_nodes}")
+    print(f"end nodes encountered: {start_node_to_cycle}")
+    
+    #  need to solve this system of eq
+    # 21883 + 43766x = 19667 + 39334y = 14681 + 29362z = 16897 + 26038w = 11911 + 23822u .. etc
+    
+    # find least common denominator 
+    max_cyc_node, biggest_cycle = None, 0
+    for node, cycle in start_node_to_cycle.items():
+        if cycle["length"] > biggest_cycle:
+            max_cyc_node = node
+            biggest_cycle = cycle["length"]
+            
+    max_cyc_offset = start_node_to_cycle[max_cyc_node]["offset"]
+    convergence_step_candidate = max_cyc_offset + biggest_cycle
+    # for every step that reaches the end on this node's path,check if the other nodes converge
+    while True:
+        convergence_step_candidate += biggest_cycle
+        has_converged = True
+        for cycle in start_node_to_cycle.values():
+            has_converged = has_converged and (convergence_step_candidate - cycle["offset"]) % cycle["length"] == 0
+        if has_converged:
+            return convergence_step_candidate
+        
+    
     
 
     
